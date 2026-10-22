@@ -80,14 +80,24 @@ jobs:
           for i in $(seq 1 100); do grep -q "Recording started" capture/record.log && break; sleep 0.1; done
           python3 -c 'import time; print(time.time())' > capture/record_start.txt
           cat capture/record.log
+          # Debug: sample the screen every 20 s, and stop a hung test after 8 minutes.
+          ( for i in $(seq -w 1 30); do sleep 20; xcrun simctl io "$UDID" screenshot --type=jpeg "capture/debug_$i.jpg" >/dev/null 2>&1; done ) &
+          SAMPLER=$!
+          ( sleep 480; echo "::warning::watchdog stopped the UI test"; pkill -INT -f "xcodebuild test-without-building" ) &
+          WATCHDOG=$!
           TEST_RUNNER_CAPTURE_DIR="$PWD/capture" xcodebuild test-without-building \
             -project Iceland.xcodeproj -scheme Iceland \
             -destination "id=$UDID" -derivedDataPath build \
             -resultBundlePath capture/Tour.xcresult \
-            -only-testing:IcelandUITests/IcelandUITests/testTour | tail -n 120 || TEST_FAILED=1
+            -test-timeouts-enabled YES -default-test-execution-time-allowance 360 \
+            -only-testing:IcelandUITests/IcelandUITests/testTour > capture/test.log 2>&1 || TEST_FAILED=1
+          kill $WATCHDOG $SAMPLER 2>/dev/null || true
+          grep -E "t = |Test Case|error|failed|Executed" capture/test.log | tail -n 150 || true
           sleep 1
           kill -INT $REC_PID
-          wait $REC_PID || true
+          for i in $(seq 1 60); do kill -0 $REC_PID 2>/dev/null || break; sleep 0.5; done
+          kill -0 $REC_PID 2>/dev/null && { echo "::warning::recordVideo did not stop"; kill -9 $REC_PID; }
+          cat capture/record.log
           ls -la capture
           cat capture/markers.txt || true
           if [ "${TEST_FAILED:-0}" = 1 ]; then echo "::warning::UI tour failed"; fi
@@ -102,9 +112,9 @@ jobs:
       - name: Publish capture to the capture-output branch
         if: always()
         run: |
-          [ -f capture/raw.mov ] || exit 0
+          [ -d capture ] || exit 0
           rm -rf /tmp/out && mkdir -p /tmp/out
-          cp capture/*.png capture/*.txt capture/raw.mov capture/record.log /tmp/out/ 2>/dev/null || true
+          cp capture/*.png capture/*.jpg capture/*.txt capture/*.log capture/raw.mov /tmp/out/ 2>/dev/null || true
           xcodebuild -version > /tmp/out/toolchain.txt
           xcrun simctl list devices | grep "$UDID" >> /tmp/out/toolchain.txt
           cd /tmp/out
