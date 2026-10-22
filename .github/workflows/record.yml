@@ -80,9 +80,6 @@ jobs:
           for i in $(seq 1 100); do grep -q "Recording started" capture/record.log && break; sleep 0.1; done
           python3 -c 'import time; print(time.time())' > capture/record_start.txt
           cat capture/record.log
-          # Debug: sample the screen every 20 s.
-          ( for i in $(seq -w 1 30); do sleep 20; xcrun simctl io "$UDID" screenshot --type=jpeg "capture/debug_$i.jpg" >/dev/null 2>&1; done ) &
-          SAMPLER=$!
           # Stop recording as soon as the tour writes its "end" marker; xcodebuild can
           # linger afterwards while finalizing logs, so give it a deadline too.
           ( for i in $(seq 1 480); do grep -q "^end" capture/markers.txt 2>/dev/null && break
@@ -96,7 +93,7 @@ jobs:
             -resultBundlePath capture/Tour.xcresult \
             -test-timeouts-enabled YES -default-test-execution-time-allowance 360 \
             -only-testing:IcelandUITests/IcelandUITests/testTour > capture/test.log 2>&1 || TEST_FAILED=1
-          kill $WATCHDOG $SAMPLER 2>/dev/null || true
+          kill $WATCHDOG 2>/dev/null || true
           grep -E "t = |Test Case|error|failed|Executed" capture/test.log | tail -n 150 || true
           sleep 1
           kill -INT $REC_PID 2>/dev/null || true
@@ -119,7 +116,7 @@ jobs:
         run: |
           [ -d capture ] || exit 0
           rm -rf /tmp/out && mkdir -p /tmp/out
-          cp capture/*.png capture/*.jpg capture/*.txt capture/*.log capture/raw.mov /tmp/out/ 2>/dev/null || true
+          cp capture/*.png capture/*.txt capture/*.log capture/raw.mov /tmp/out/ 2>/dev/null || true
           xcodebuild -version > /tmp/out/toolchain.txt
           xcrun simctl list devices | grep "$UDID" >> /tmp/out/toolchain.txt
           cd /tmp/out

@@ -3,8 +3,7 @@
 
 Usage: process_capture.py <capture-dir> <output-dir> <font-dir>
 
-- Trims raw.mov to the app tour (between the "start" and "end" markers written
-  by the UI test) and compresses it to H.264 720p.
+- Trims raw.mov to just the in-app tour and compresses it to H.264 720p.
 - Builds App Store screenshots (6.9", 1320x2868): the plain simulator screenshots
   and marketing versions with a caption.
 """
@@ -18,16 +17,48 @@ cap, out, fonts = sys.argv[1:4]
 os.makedirs(out, exist_ok=True)
 
 # ---------- video ----------
-record_start = float(open(os.path.join(cap, "record_start.txt")).read().strip())
-markers = dict(line.split() for line in open(os.path.join(cap, "markers.txt")) if line.strip())
-start = float(markers["start"]) - record_start
-end = float(markers["end"]) - record_start
-print(f"trim {start:.2f}s – {end:.2f}s ({end - start:.1f}s)")
+# The simulator recorder's timestamps drift from wall-clock time on a busy CI
+# machine, so the cut points are found from the frames themselves: the tour
+# starts right after the white launch screen and ends 2 s after the last change.
+# Long still stretches (XCUITest waiting for the app to idle) are shortened.
+import numpy as np
+
+raw = os.path.join(cap, "raw.mov")
+FPS, SW, SH = 4, 110, 239
+data = subprocess.run(["ffmpeg", "-v", "error", "-i", raw, "-vf", f"fps={FPS},scale={SW}:{SH}",
+                       "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
+frames = np.frombuffer(data, np.uint8).reshape(-1, SH, SW).astype(np.float32)
+bright, spread = frames.mean(axis=(1, 2)), frames.std(axis=(1, 2))
+white = np.where((bright > 240) & (spread < 25))[0]
+first = (white[-1] + 1) if len(white) else 0
+moving = np.abs(np.diff(frames, axis=0)).mean(axis=(1, 2)) > 0.6
+moves = np.where(moving)[0]
+start = first / FPS + 0.25
+end = min(len(frames) / FPS, moves[-1] / FPS + 2.0)
+
+MAX_STILL, KEEP_STILL = 3.0, 1.8
+keep, cursor, i = [], start, first
+while i < len(moving):
+    if moving[i]:
+        i += 1
+        continue
+    j = i
+    while j < len(moving) and not moving[j]:
+        j += 1
+    a_t, b_t = i / FPS, j / FPS
+    if b_t - a_t > MAX_STILL and a_t >= start and b_t <= end:
+        keep.append((cursor, a_t + KEEP_STILL / 2))
+        cursor = b_t - KEEP_STILL / 2
+    i = j
+keep.append((cursor, end))
+total = sum(b - a for a, b in keep)
+print(f"tour {start:.2f}s – {end:.2f}s, {len(keep)} segments, {total:.1f}s after shortening pauses")
+
+select = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in keep)
 video = os.path.join(out, "Iceland-App-Demo.mp4")
 subprocess.run([
-    "ffmpeg", "-y", "-loglevel", "error", "-ss", f"{start:.3f}", "-i", os.path.join(cap, "raw.mov"),
-    "-t", f"{end - start:.3f}", "-an",
-    "-vf", "fps=30,scale=720:-2:flags=lanczos,format=yuv420p",
+    "ffmpeg", "-y", "-loglevel", "error", "-i", raw, "-an",
+    "-vf", f"fps=30,select='{select}',setpts=N/30/TB,scale=720:-2:flags=lanczos,format=yuv420p",
     "-c:v", "libx264", "-preset", "slow", "-crf", "26", "-profile:v", "high",
     "-movflags", "+faststart", video,
 ], check=True)
@@ -38,7 +69,7 @@ W, H = 1320, 2868
 shots = [
     ("01-explore", "探索冰島絕景", "13 個必訪景點，盡在掌握", ((8, 24, 52), (24, 110, 160))),
     ("02-detail", "深入認識每個景點", "最佳季節、停留時間、必看亮點", ((10, 40, 60), (40, 150, 130))),
-    ("04-map-detail", "3D 地圖飛越冰島", "點一下，直達景點上空", ((14, 30, 70), (70, 90, 190))),
+    ("03-map", "全島景點一張地圖", "照片標記，點一下就出發", ((14, 30, 70), (70, 90, 190))),
     ("05-favorites", "收藏你的夢想清單", "規劃專屬的冰島行程", ((60, 20, 40), (210, 90, 70))),
     ("06-info", "出發前的旅遊指南", "基本資訊與實用小提醒", ((6, 20, 40), (30, 150, 110))),
 ]
