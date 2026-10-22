@@ -1,27 +1,49 @@
 import SwiftUI
 
 struct InfoView: View {
-    private let facts: [(symbol: String, title: String, value: String)] = [
-        ("building.2.fill", "首都", "雷克雅維克"),
-        ("person.3.fill", "人口", "約 39 萬人"),
-        ("square.dashed", "面積", "10.3 萬 km²"),
-        ("creditcard.fill", "貨幣", "冰島克朗 ISK"),
-        ("character.bubble.fill", "語言", "冰島語"),
-        ("clock.fill", "時區", "UTC+0（比台灣慢 8 小時）"),
+    private struct Fact: Identifiable {
+        let symbol: String
+        let title: String
+        let value: String
+        var id: String { title }
+    }
+
+    private struct Season: Identifiable {
+        let symbol: String
+        let title: String
+        let months: String
+        let text: String
+        let color: Color
+        var id: String { title }
+    }
+
+    private struct Tip: Identifiable {
+        let symbol: String
+        let text: String
+        var id: String { text }
+    }
+
+    private let facts = [
+        Fact(symbol: "building.2.fill", title: "首都", value: "雷克雅維克"),
+        Fact(symbol: "person.3.fill", title: "人口", value: "約 39 萬人"),
+        Fact(symbol: "square.dashed", title: "面積", value: "10.3 萬 km²"),
+        Fact(symbol: "creditcard.fill", title: "貨幣", value: "冰島克朗 ISK"),
+        Fact(symbol: "character.bubble.fill", title: "語言", value: "冰島語"),
+        Fact(symbol: "clock.fill", title: "時區", value: "UTC+0（比台灣慢 8 小時）"),
     ]
 
-    private let seasons: [(symbol: String, title: String, months: String, text: String, color: Color)] = [
-        ("sun.max.fill", "夏季", "6–8 月", "午夜太陽、高地 F 路開放，最適合自駕環島與健行。", .orange),
-        ("sparkles", "冬季", "11–3 月", "漫長黑夜是追極光的最佳時機，還能探訪藍冰洞。", .aurora),
-        ("leaf.fill", "春秋", "4–5、9–10 月", "遊客較少、價格較低，有機會同時看到極光與綠意。", .glacier),
+    private let seasons = [
+        Season(symbol: "sun.max.fill", title: "夏季", months: "6–8 月", text: "午夜太陽、高地 F 路開放，最適合自駕環島與健行。", color: .orange),
+        Season(symbol: "sparkles", title: "冬季", months: "11–3 月", text: "漫長黑夜是追極光的最佳時機，還能探訪藍冰洞。", color: .aurora),
+        Season(symbol: "leaf.fill", title: "春秋", months: "4–5、9–10 月", text: "遊客較少、價格較低，有機會同時看到極光與綠意。", color: .glacier),
     ]
 
     private let tips = [
-        ("car.side.fill", "自駕請留意天氣與路況，出發前查看 road.is 與 vedur.is。"),
-        ("water.waves", "黑沙灘的瘋狗浪非常危險，請與海水保持距離。"),
-        ("drop.fill", "冰島自來水可直接生飲，不需要買瓶裝水。"),
-        ("leaf", "請勿踩踏青苔，冰島的青苔需要數十年才能長回來。"),
-        ("tshirt.fill", "洋蔥式穿搭＋防風防水外套，一天可能經歷四季。"),
+        Tip(symbol: "car.side.fill", text: "自駕請留意天氣與路況，出發前查看 road.is 與 vedur.is。"),
+        Tip(symbol: "water.waves", text: "黑沙灘的瘋狗浪非常危險，請與海水保持距離。"),
+        Tip(symbol: "drop.fill", text: "冰島自來水可直接生飲，不需要買瓶裝水。"),
+        Tip(symbol: "leaf", text: "請勿踩踏青苔，冰島的青苔需要數十年才能長回來。"),
+        Tip(symbol: "tshirt.fill", text: "洋蔥式穿搭＋防風防水外套，一天可能經歷四季。"),
     ]
 
     var body: some View {
@@ -32,7 +54,7 @@ struct InfoView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         SectionTitle(text: "基本資訊")
                         LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                            ForEach(facts, id: \.title) { fact in
+                            ForEach(facts) { fact in
                                 HStack(spacing: 12) {
                                     Image(systemName: fact.symbol)
                                         .font(.title3)
@@ -59,7 +81,7 @@ struct InfoView: View {
 
                     VStack(alignment: .leading, spacing: 14) {
                         SectionTitle(text: "什麼時候去？")
-                        ForEach(seasons, id: \.title) { season in
+                        ForEach(seasons) { season in
                             HStack(alignment: .top, spacing: 14) {
                                 Image(systemName: season.symbol)
                                     .font(.title2)
@@ -86,12 +108,12 @@ struct InfoView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         SectionTitle(text: "旅遊小提醒")
                         VStack(alignment: .leading, spacing: 14) {
-                            ForEach(tips, id: \.1) { tip in
+                            ForEach(tips) { tip in
                                 HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: tip.0)
+                                    Image(systemName: tip.symbol)
                                         .foregroundStyle(Color.glacier)
                                         .frame(width: 24)
-                                    Text(tip.1)
+                                    Text(tip.text)
                                         .font(.subheadline)
                                 }
                             }

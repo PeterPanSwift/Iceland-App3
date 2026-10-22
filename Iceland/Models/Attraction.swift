@@ -1,7 +1,7 @@
 import CoreLocation
 import Foundation
 
-enum Category: String, CaseIterable, Identifiable {
+enum SpotCategory: String, CaseIterable, Identifiable {
     case waterfall = "瀑布"
     case iceAndCoast = "冰與海"
     case geothermal = "地熱"
@@ -37,7 +37,7 @@ struct Attraction: Identifiable, Hashable {
     let name: String
     let localName: String
     let region: String
-    let category: Category
+    let category: SpotCategory
     let tagline: String
     let summary: String
     let highlights: [String]

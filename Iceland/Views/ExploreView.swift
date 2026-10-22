@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ExploreView: View {
-    @State private var category: Category?
+    @State private var category: SpotCategory?
 
     private var filtered: [Attraction] {
         guard let category else { return Attraction.all }
@@ -55,7 +55,7 @@ struct ExploreView: View {
                     category = nil
                 }
                 .accessibilityIdentifier("chip-all")
-                ForEach(Category.allCases) { item in
+                ForEach(SpotCategory.allCases) { item in
                     CategoryChip(title: item.rawValue, symbol: item.symbol, isSelected: category == item) {
                         category = item
                     }

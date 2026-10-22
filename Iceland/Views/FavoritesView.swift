@@ -43,7 +43,7 @@ struct FavoritesView: View {
         return HStack(spacing: 16) {
             Image(systemName: "map.circle.fill")
                 .font(.system(size: 42))
-                .foregroundStyle(.white, Color.glacier)
+                .foregroundStyle(Color.white, Color.glacier)
             VStack(alignment: .leading, spacing: 4) {
                 Text("你的冰島清單")
                     .font(.headline)

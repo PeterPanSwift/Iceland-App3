@@ -26,8 +26,8 @@ struct MapExploreView: View {
             .navigationTitle("景點地圖")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if selected != nil {
-                    ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if selected != nil {
                         Button("全島") {
                             withAnimation(.easeInOut(duration: 1.2)) {
                                 selected = nil
