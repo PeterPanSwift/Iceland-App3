@@ -122,7 +122,7 @@ final class IcelandUITests: XCTestCase {
 
     private func scrollUntilHittable(_ element: XCUIElement, in container: XCUIElement, horizontal: Bool = false) {
         for _ in 0..<10 {
-            if element.exists && element.isHittable && isComfortablyVisible(element, horizontal: horizontal) { return }
+            if element.exists && isComfortablyVisible(element, horizontal: horizontal) && element.isHittable { return }
             if horizontal {
                 container.swipeLeft(velocity: .slow)
             } else {

@@ -118,6 +118,8 @@ jobs:
           xcodebuild -version > /tmp/out/toolchain.txt
           xcrun simctl list devices | grep "$UDID" >> /tmp/out/toolchain.txt
           cd /tmp/out
+          # Keep every file below GitHub's 100 MB limit.
+          [ -f raw.mov ] && split -b 40m raw.mov raw.mov.part- && rm raw.mov
           git init -q -b capture-output
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
