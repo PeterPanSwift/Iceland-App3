@@ -1,0 +1,116 @@
+name: Build, record video & screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Iceland/**"
+      - "IcelandUITests/**"
+      - "Iceland.xcodeproj/**"
+      - ".github/workflows/record.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: record-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVICE_NAME: iPhone 18 Pro Max
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i iphone || true
+
+      - name: Create and boot the iPhone 18 Pro Max simulator
+        run: |
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c '
+          import json, sys
+          rs = [r for r in json.load(sys.stdin)["runtimes"] if r["platform"] == "iOS" and r["isAvailable"]]
+          rs.sort(key=lambda r: [int(p) for p in r["version"].split(".")])
+          print(rs[-1]["identifier"])')
+          TYPE=$(xcrun simctl list devicetypes -j | python3 -c '
+          import json, os, sys
+          name = os.environ["DEVICE_NAME"]
+          print([d["identifier"] for d in json.load(sys.stdin)["devicetypes"] if d["name"] == name][0])')
+          echo "Runtime: $RUNTIME / Device type: $TYPE"
+          UDID=$(xcrun simctl create "Iceland $DEVICE_NAME" "$TYPE" "$RUNTIME")
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Build app and UI tests
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project Iceland.xcodeproj -scheme Iceland \
+            -destination "id=$UDID" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=YES | tail -n 80
+
+      - name: Warm up (install & first launch)
+        run: |
+          APP=$(find build/Build/Products -name Iceland.app -path "*iphonesimulator*" | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" com.peterpanswift.iceland
+          sleep 8
+          xcrun simctl terminate "$UDID" com.peterpanswift.iceland || true
+          sleep 2
+
+      - name: Record UI tour
+        run: |
+          set -o pipefail
+          mkdir -p capture
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force capture/raw.mov > capture/record.log 2>&1 &
+          REC_PID=$!
+          for i in $(seq 1 100); do grep -q "Recording started" capture/record.log && break; sleep 0.1; done
+          python3 -c 'import time; print(time.time())' > capture/record_start.txt
+          cat capture/record.log
+          TEST_RUNNER_CAPTURE_DIR="$PWD/capture" xcodebuild test-without-building \
+            -project Iceland.xcodeproj -scheme Iceland \
+            -destination "id=$UDID" -derivedDataPath build \
+            -resultBundlePath capture/Tour.xcresult \
+            -only-testing:IcelandUITests/IcelandUITests/testTour | tail -n 120 || TEST_FAILED=1
+          sleep 1
+          kill -INT $REC_PID
+          wait $REC_PID || true
+          ls -la capture
+          cat capture/markers.txt || true
+          if [ "${TEST_FAILED:-0}" = 1 ]; then echo "::warning::UI tour failed"; fi
+
+      - name: Upload capture artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture
+          path: capture
+
+      - name: Publish capture to the capture-output branch
+        if: always()
+        run: |
+          [ -f capture/raw.mov ] || exit 0
+          rm -rf /tmp/out && mkdir -p /tmp/out
+          cp capture/*.png capture/*.txt capture/raw.mov capture/record.log /tmp/out/ 2>/dev/null || true
+          xcodebuild -version > /tmp/out/toolchain.txt
+          xcrun simctl list devices | grep "$UDID" >> /tmp/out/toolchain.txt
+          cd /tmp/out
+          git init -q -b capture-output
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Capture from run ${{ github.run_id }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" capture-output

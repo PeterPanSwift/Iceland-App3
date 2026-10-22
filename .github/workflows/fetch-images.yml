@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   fetch:
@@ -37,3 +38,7 @@ jobs:
           git add Iceland/Assets.xcassets Iceland/Resources/credits.json
           git diff --cached --quiet || git commit -m "Add Iceland photos from Wikimedia Commons"
           git push origin HEAD:${{ github.ref_name }}
+          # Pushes made with GITHUB_TOKEN don't trigger workflows, so start the recording explicitly.
+          gh workflow run record.yml --ref ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ github.token }}
