@@ -4,3 +4,4 @@ DerivedData/
 build/
 *.xcresult
 image-candidates/
+*.ipa
