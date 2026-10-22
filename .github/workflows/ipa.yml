@@ -1,0 +1,58 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "Iceland/**"
+      - "Iceland.xcodeproj/**"
+      - ".github/workflows/ipa.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Release for iOS devices without signing
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcodebuild build \
+            -project Iceland.xcodeproj -scheme Iceland -configuration Release \
+            -sdk iphoneos -destination "generic/platform=iOS" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -n 40
+
+      - name: Package IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Iceland.app
+          lipo -info "$APP/Iceland"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleShortVersionString" \
+            -c "Print :MinimumOSVersion" "$APP/Info.plist"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../Iceland-unsigned.ipa Payload)
+          ls -la Iceland-unsigned.ipa
+          unzip -l Iceland-unsigned.ipa | tail -n 3
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Iceland-unsigned-ipa
+          path: Iceland-unsigned.ipa
+
+      - name: Publish IPA to the ipa-output branch
+        run: |
+          rm -rf /tmp/out && mkdir -p /tmp/out && cp Iceland-unsigned.ipa /tmp/out/
+          cd /tmp/out
+          git init -q -b ipa-output
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Unsigned IPA from ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ipa-output
