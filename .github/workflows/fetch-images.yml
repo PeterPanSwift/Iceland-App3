@@ -1,0 +1,39 @@
+name: Fetch Iceland photos
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/fetch_images.py"
+      - "scripts/image_selection.json"
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download candidate previews
+        if: ${{ hashFiles('scripts/image_selection.json') == '' }}
+        run: |
+          python3 scripts/fetch_images.py candidates
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan image-candidates
+          git rm -rf --cached . > /dev/null
+          git add image-candidates
+          git commit -m "Candidate Iceland photos"
+          git push -f origin image-candidates
+
+      - name: Download selected photos into the asset catalog
+        if: ${{ hashFiles('scripts/image_selection.json') != '' }}
+        run: |
+          python3 scripts/fetch_images.py final
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Iceland/Assets.xcassets Iceland/Resources/credits.json
+          git diff --cached --quiet || git commit -m "Add Iceland photos from Wikimedia Commons"
+          git push origin HEAD:${{ github.ref_name }}
