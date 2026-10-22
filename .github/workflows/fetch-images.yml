@@ -24,7 +24,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan image-candidates
           git rm -rf --cached . > /dev/null
-          git add image-candidates
+          git add -f image-candidates
           git commit -m "Candidate Iceland photos"
           git push -f origin image-candidates
 
