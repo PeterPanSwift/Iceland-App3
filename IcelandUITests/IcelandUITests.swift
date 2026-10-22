@@ -124,7 +124,10 @@ final class IcelandUITests: XCTestCase {
         for _ in 0..<10 {
             if element.exists && isComfortablyVisible(element, horizontal: horizontal) && element.isHittable { return }
             if horizontal {
-                container.swipeLeft(velocity: .slow)
+                // A press-and-drag moves a fixed distance without a fling.
+                let from = container.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5))
+                let to = container.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+                from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
             } else {
                 container.swipeUp(velocity: .slow)
             }

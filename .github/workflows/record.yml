@@ -80,10 +80,15 @@ jobs:
           for i in $(seq 1 100); do grep -q "Recording started" capture/record.log && break; sleep 0.1; done
           python3 -c 'import time; print(time.time())' > capture/record_start.txt
           cat capture/record.log
-          # Debug: sample the screen every 20 s, and stop a hung test after 8 minutes.
+          # Debug: sample the screen every 20 s.
           ( for i in $(seq -w 1 30); do sleep 20; xcrun simctl io "$UDID" screenshot --type=jpeg "capture/debug_$i.jpg" >/dev/null 2>&1; done ) &
           SAMPLER=$!
-          ( sleep 480; echo "::warning::watchdog stopped the UI test"; pkill -INT -f "xcodebuild test-without-building" ) &
+          # Stop recording as soon as the tour writes its "end" marker; xcodebuild can
+          # linger afterwards while finalizing logs, so give it a deadline too.
+          ( for i in $(seq 1 480); do grep -q "^end" capture/markers.txt 2>/dev/null && break
+              grep -qE "Test Case .*(passed|failed)" capture/test.log 2>/dev/null && break; sleep 1; done
+            sleep 1; kill -INT $REC_PID
+            sleep 90; pkill -INT -f "xcodebuild test-without-building" && echo "::warning::watchdog stopped xcodebuild" ) &
           WATCHDOG=$!
           TEST_RUNNER_CAPTURE_DIR="$PWD/capture" xcodebuild test-without-building \
             -project Iceland.xcodeproj -scheme Iceland \
@@ -94,7 +99,7 @@ jobs:
           kill $WATCHDOG $SAMPLER 2>/dev/null || true
           grep -E "t = |Test Case|error|failed|Executed" capture/test.log | tail -n 150 || true
           sleep 1
-          kill -INT $REC_PID
+          kill -INT $REC_PID 2>/dev/null || true
           for i in $(seq 1 60); do kill -0 $REC_PID 2>/dev/null || break; sleep 0.5; done
           kill -0 $REC_PID 2>/dev/null && { echo "::warning::recordVideo did not stop"; kill -9 $REC_PID; }
           cat capture/record.log
