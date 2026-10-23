@@ -1,0 +1,3 @@
+Xcode 27.0
+Build version 27A266a
+    Iceland iPhone 18 Pro Max (EAFAE0E4-2732-453F-AD2E-18070F7DA415) (Booted) 
